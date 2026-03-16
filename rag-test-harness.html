@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>RAG Chunking & Test Harness</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:system-ui,sans-serif;background:#f9f9f7;color:#1a1a1a;font-size:14px;}
+.wrap{max-width:1100px;margin:0 auto;padding:24px 20px;}
+h1{font-size:20px;font-weight:600;margin-bottom:4px;}
+.sub{font-size:12px;color:#666;margin-bottom:20px;}
+textarea,input[type=text]{width:100%;border:1px solid #d0d0cc;border-radius:8px;padding:8px 12px;font-size:12px;font-family:inherit;color:#1a1a1a;background:#fff;}
+textarea{resize:vertical;}
+textarea:focus,input[type=text]:focus{outline:none;border-color:#888;}
+button{border:1px solid #ccc;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;font-family:inherit;color:#1a1a1a;background:#fff;}
+button:hover{background:#f0f0ee;}
+button.primary{background:#1a1a1a;color:#fff;border-color:transparent;}
+button.primary:hover{opacity:0.85;}
+button:disabled{opacity:0.4;cursor:not-allowed;}
+select{width:100%;border:1px solid #d0d0cc;border-radius:8px;padding:8px 10px;font-size:12px;font-family:inherit;color:#1a1a1a;background:#fff;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.card{background:#fff;border:1px solid #e0e0dc;border-radius:12px;padding:16px;}
+.label{font-size:11px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;}
+.strat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
+.strat-btn{border:1.5px solid #ddd;border-radius:8px;padding:9px 10px;text-align:left;cursor:pointer;background:#fff;transition:all 0.15s;}
+.strat-btn:hover{background:#f5f5f3;}
+.strat-btn.active{border-color:#1a1a1a;background:#f5f5f3;}
+.strat-name{font-size:12px;font-weight:600;}
+.strat-desc{font-size:11px;color:#777;margin-top:2px;line-height:1.4;}
+.chunk-pill{display:inline-block;background:#f5f5f3;border:1px solid #e0e0dc;border-radius:7px;padding:5px 9px;font-size:11px;font-family:monospace;color:#555;margin:3px;cursor:pointer;line-height:1.5;vertical-align:top;max-width:100%;}
+.chunk-pill:hover{border-color:#888;}
+.chunk-pill.hit{border-color:#3a8c3a;background:#eaf5ea;color:#1d5c1d;}
+.chunk-pill .score{font-size:10px;font-weight:600;display:block;margin-top:2px;}
+.metric-row{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f0f0ee;}
+.metric-row:last-child{border-bottom:none;}
+.metric-name{font-size:12px;color:#555;width:160px;flex-shrink:0;}
+.bar-wrap{flex:1;height:5px;background:#f0f0ee;border-radius:3px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:3px;}
+.metric-num{font-size:12px;font-weight:600;width:36px;text-align:right;}
+.compare-col{border:1px solid #e0e0dc;border-radius:10px;padding:12px;flex:1;min-width:160px;}
+.compare-col.winner{border-color:#3a8c3a;background:#eaf5ea;}
+.compare-col .col-title{font-size:12px;font-weight:600;margin-bottom:8px;}
+.answer-box{background:#f5f5f3;border-radius:8px;padding:12px;font-size:12px;line-height:1.75;min-height:60px;white-space:pre-wrap;color:#1a1a1a;}
+.spinner{display:inline-block;width:12px;height:12px;border:2px solid #ddd;border-top-color:#333;border-radius:50%;animation:spin 0.7s linear infinite;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.badge{font-size:10px;padding:2px 7px;border-radius:20px;font-weight:600;}
+.badge-green{background:#eaf5ea;color:#1d5c1d;}
+.badge-amber{background:#fef3e2;color:#7a4800;}
+.tab-row{display:flex;gap:0;border-bottom:1px solid #e0e0dc;margin-bottom:16px;}
+.tab{padding:9px 16px;font-size:12px;cursor:pointer;border-bottom:2px solid transparent;color:#888;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit;font-weight:500;}
+.tab.active{border-bottom-color:#1a1a1a;color:#1a1a1a;}
+.pane{display:none;}.pane.active{display:block;}
+.sep{height:1px;background:#f0f0ee;margin:14px 0;}
+.ctx-box{background:#f5f5f3;border-radius:8px;padding:10px;font-size:11px;font-family:monospace;color:#555;max-height:180px;overflow-y:auto;white-space:pre-wrap;line-height:1.5;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>RAG Chunking & Test Harness</h1>
+<div class="sub">Paste any document, choose a chunking strategy, compare retrieval quality, and test with Claude API.</div>
+
+<div class="tab-row">
+  <button class="tab active" onclick="sw('explore')">Chunk explorer</button>
+  <button class="tab" onclick="sw('compare')">Strategy comparison</button>
+  
+</div>
+
+<!-- EXPLORER -->
+<div class="pane active" id="pane-explore">
+  <div class="grid2" style="margin-bottom:14px;">
+    <div>
+      <div class="label">Document</div>
+      <textarea id="doc" rows="13" placeholder="Paste document text...">Amaan Suheab
++91 9059436598 | amaansuheab45@gmail.com | Hyderabad, India
+
+EDUCATION
+Methodist College of Engineering, Hyderabad (2022-2026)
+B.Tech Computer Science and Engineering
+
+SKILLS
+Languages: Python, C, C++, HTML, CSS, SQL
+Frameworks: TensorFlow, PyTorch, Scikit-learn
+Tools: Git, GitHub, VS Code, Power BI, Tableau
+Financial Analytics: Risk Modeling, Predictive Analytics
+
+PROJECTS
+AI-Based Credit Risk Assessment System
+- Developed a machine learning system to evaluate borrower credit risk
+- Implemented XGBoost and Random Forest models to predict loan default probability
+- Achieved high predictive accuracy using cross-validation and hyperparameter tuning
+
+Investment Research and Market Intelligence Platform (Current)
+- Building an AI-driven platform for automated investment research
+- Integrating LLM-based document analysis with financial data pipelines
+
+CERTIFICATIONS
+Foundations Associate (Oracle Cloud)
+Python with Data Science (NPTEL)
+Data Analytics Virtual Experience - Deloitte</textarea>
+    </div>
+    <div>
+      <div class="label">Chunking strategy</div>
+      <div class="strat-grid">
+        <div class="strat-btn active" onclick="selStrat('line',this)">
+          <div class="strat-name">Line / bullet</div>
+          <div class="strat-desc">Split on newlines, prefix bullets with header. Best for resumes & lists.</div>
+        </div>
+        <div class="strat-btn" onclick="selStrat('sentence',this)">
+          <div class="strat-name">Sentence</div>
+          <div class="strat-desc">Split on . ! ? Best for dense prose.</div>
+        </div>
+        <div class="strat-btn" onclick="selStrat('paragraph',this)">
+          <div class="strat-name">Paragraph</div>
+          <div class="strat-desc">Split on blank lines. Best for reports.</div>
+        </div>
+        <div class="strat-btn" onclick="selStrat('sliding',this)">
+          <div class="strat-name">Sliding window</div>
+          <div class="strat-desc">Fixed word count with overlap.</div>
+        </div>
+      </div>
+      <div id="sliding-controls" style="display:none;margin-bottom:10px;">
+        <div style="display:flex;gap:14px;">
+          <div><div class="label">Window: <span id="win-val">60</span>w</div><input type="range" min="20" max="300" step="10" value="60" oninput="document.getElementById('win-val').textContent=this.value;render()"></div>
+          <div><div class="label">Overlap: <span id="ov-val">10</span>w</div><input type="range" min="0" max="100" step="5" value="10" oninput="document.getElementById('ov-val').textContent=this.value;render()"></div>
+        </div>
+      </div>
+      <div class="label">Query (highlights matching chunks)</div>
+      <input type="text" id="query" value="What projects has this person worked on?" oninput="render()"/>
+      <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+        <button onclick="setQ('What are the projects?')">projects</button>
+        <button onclick="setQ('What skills does this person have?')">skills</button>
+        <button onclick="setQ('Where did this person study?')">education</button>
+        <button onclick="setQ('What is the name and contact?')">contact</button>
+        <button onclick="setQ('What certifications are listed?')">certifications</button>
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+    <div class="label" style="margin-bottom:0;">Chunks (<span id="chunk-count">0</span>) — <span style="color:#3a8c3a;font-weight:600;">green border</span> = top-3 for query</div>
+    <div style="font-size:11px;color:#888;">Avg size: <span id="avg-size">—</span> words</div>
+  </div>
+  <div id="chunks-out" style="line-height:1;"></div>
+  <div class="sep"></div>
+  <div class="label">Retrieval quality metrics</div>
+  <div id="metrics-out"></div>
+</div>
+
+<!-- COMPARE -->
+<div class="pane" id="pane-compare">
+  <div style="margin-bottom:14px;">
+    <div class="label">Query to compare across all strategies</div>
+    <div style="display:flex;gap:8px;">
+      <input type="text" id="cmp-query" value="What projects has this person worked on?" style="flex:1;"/>
+      <button class="primary" onclick="runCompare()" id="cmp-btn">Compare all</button>
+    </div>
+  </div>
+  <div id="compare-out" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
+  <div id="compare-verdict" style="margin-top:14px;"></div>
+</div>
+
+</div>
+  <div style="margin-bottom:14px;">
+    <div class="label">Query</div>
+    <div style="display:flex;gap:8px;">
+      <input type="text" id="live-q" value="What projects has this person worked on?" style="flex:1;"/>
+      <button class="primary" onclick="runLive()" id="live-btn">Ask Claude</button>
+    </div>
+  </div>
+  <div id="live-out" style="display:none;">
+    <div class="sep"></div>
+    <div class="grid2" style="margin-bottom:14px;">
+      <div>
+        <div class="label">Injected chunks (<span id="live-n">0</span>)</div>
+        <div id="live-chunks"></div>
+      </div>
+      <div>
+        <div class="label">Context window sent to Claude</div>
+        <div class="ctx-box" id="live-ctx"></div>
+        <div style="font-size:11px;color:#888;margin-top:4px;" id="live-ctx-words"></div>
+      </div>
+    </div>
+    <div class="label">Claude's answer</div>
+    <div class="answer-box" id="live-answer">—</div>
+    <div style="margin-top:14px;">
+      <div class="label">Retrieval metrics</div>
+      <div id="live-metrics"></div>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<script>
+const STOP=new Set(['the','a','an','and','or','but','in','on','at','to','for','of','with','by','is','are','was','were','be','been','have','has','had','do','does','did','will','would','could','should','may','might','this','that','these','those','it','its','from','as','each','more','most','other','some','such','no','not','only','same','than','too','very','can','just','also','i','we','you','they','he','she','so','if','up','out','then','when','all','their','our','which','who','about','there','what','how','his','her']);
+const tok=t=>t.toLowerCase().replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>2&&!STOP.has(w));
+
+let curStrat='line';
+
+// ── Chunking strategies ──
+const chunkSentence=t=>t.split(/(?<=[.!?])\s+/).map(s=>s.trim()).filter(s=>s.length>15);
+
+function chunkLine(text){
+  const lines=text.split('\n').map(l=>l.trim()).filter(l=>l.length>2);
+  const chunks=[];let header='';let buf=[];
+  const flush=()=>{buf.forEach(b=>chunks.push((header?header+': ':'')+b));buf=[];};
+  for(const line of lines){
+    const isBullet=/^[-*]\s+/.test(line)||/^\d+\.\s+/.test(line);
+    const isHeader=/^[A-Z][A-Z\s]{2,}$/.test(line)||(/^[A-Z].{3,50}$/.test(line)&&!isBullet&&line.length<60);
+    if(isHeader&&buf.length>0){flush();header=line;}
+    else if(isBullet){buf.push(line.replace(/^[-*]\s+/,'').replace(/^\d+\.\s+/,''));}
+    else{flush();chunks.push(line);if(isHeader)header=line;}
+  }
+  flush();
+  return chunks.filter(c=>c.length>10);
+}
+
+const chunkParagraph=t=>t.split(/\n\s*\n/).map(p=>p.trim()).filter(p=>p.length>20);
+
+function chunkSliding(text){
+  const size=parseInt(document.getElementById('win-val').textContent)||60;
+  const overlap=parseInt(document.getElementById('ov-val').textContent)||10;
+  const words=text.split(/\s+/).filter(w=>w.length>0);
+  const chunks=[];
+  for(let i=0;i<words.length;i+=size-overlap){
+    const sl=words.slice(i,i+size).join(' ');
+    if(sl.trim().length>20)chunks.push(sl);
+    if(i+size>=words.length)break;
+  }
+  return chunks;
+}
+
+const getChunks=(text,strat)=>({line:chunkLine,sentence:chunkSentence,paragraph:chunkParagraph,sliding:chunkSliding}[strat]||chunkLine)(text).map((t,i)=>({text:t,idx:i}));
+
+// ── Scoring ──
+function idfOf(chunks){
+  const N=chunks.length,df={};
+  chunks.forEach(c=>{new Set(tok(c.text)).forEach(t=>{df[t]=(df[t]||0)+1;});});
+  const idf={};Object.keys(df).forEach(t=>{idf[t]=Math.log((N+1)/(df[t]+1))+1;});
+  return idf;
+}
+function tfS(qT,cT,idf){
+  const tf={};cT.forEach(t=>{tf[t]=(tf[t]||0)+1;});
+  const mx=Math.max(1,...Object.values(tf));Object.keys(tf).forEach(k=>tf[k]/=mx);
+  let s=0;qT.forEach(qt=>{if(tf[qt])s+=tf[qt]*(idf[qt]||1);cT.forEach(ct=>{if(ct!==qt&&ct.includes(qt))s+=0.2*(idf[ct]||0.5);});});
+  return s;
+}
+function semS(qT,cT){
+  const qBg=new Set();for(let i=0;i<qT.length-1;i++)qBg.add(qT[i]+'_'+qT[i+1]);
+  const cBg=new Set();for(let i=0;i<cT.length-1;i++)cBg.add(cT[i]+'_'+cT[i+1]);
+  const cSet=new Set(cT);let s=0;
+  qT.forEach(qt=>{if(cSet.has(qt))s+=1.5;});
+  qBg.forEach(bg=>{if(cBg.has(bg))s+=2.5;});
+  qT.forEach(qt=>{cT.forEach(ct=>{if(ct!==qt&&ct.startsWith(qt.slice(0,Math.max(4,qt.length-2))))s+=0.5;});});
+  return s;
+}
+function scoreChunks(query,chunks){
+  const idf=idfOf(chunks),qT=tok(query);
+  const sc=chunks.map(c=>{const cT=tok(c.text);return{...c,ts:tfS(qT,cT,idf),ss:semS(qT,cT)};});
+  const mxT=Math.max(1,...sc.map(c=>c.ts)),mxS=Math.max(1,...sc.map(c=>c.ss));
+  sc.forEach(c=>{c.tN=c.ts/mxT;c.sN=c.ss/mxS;c.score=c.tN*0.55+c.sN*0.45;});
+  return sc.sort((a,b)=>b.score-a.score);
+}
+
+// ── Explorer ──
+function render(){
+  const text=document.getElementById('doc').value.trim();
+  const query=document.getElementById('query').value.trim();
+  if(!text)return;
+  const chunks=getChunks(text,curStrat);
+  const scored=query?scoreChunks(query,chunks):chunks.map(c=>({...c,score:0,tN:0,sN:0}));
+  const top3=new Set(scored.slice(0,3).map(c=>c.idx));
+  const totalWords=chunks.reduce((s,c)=>s+c.text.split(/\s+/).length,0);
+  document.getElementById('chunk-count').textContent=chunks.length;
+  document.getElementById('avg-size').textContent=chunks.length?Math.round(totalWords/chunks.length)+' words':'—';
+  const byIdx={};scored.forEach(c=>{byIdx[c.idx]=c;});
+  document.getElementById('chunks-out').innerHTML=chunks.map((_,i)=>{
+    const c=byIdx[i]||{...chunks[i],score:0,tN:0,sN:0};
+    const isTop=top3.has(i);const pct=Math.round((c.score||0)*100);
+    return`<span class="chunk-pill${isTop?' hit':''}" title="TF-IDF: ${Math.round((c.tN||0)*100)}% | Semantic: ${Math.round((c.sN||0)*100)}%">${esc(c.text.slice(0,90))}${c.text.length>90?'…':''}<span class="score">${isTop?'top-'+([...top3].sort().indexOf(i)+1)+' · ':''}${pct}%</span></span>`;
+  }).join('');
+  if(query){
+    const qT=tok(query),topChunks=scored.slice(0,3),allTop=topChunks.map(c=>c.text).join(' ');
+    const hitRate=qT.length?qT.filter(t=>allTop.toLowerCase().includes(t)).length/qT.length:0;
+    const avgW=chunks.length?totalWords/chunks.length:0;
+    const prec=topChunks.filter(c=>c.score>0.3).length/Math.max(1,topChunks.length);
+    renderMetrics('metrics-out',[
+      {name:'Token hit rate',val:hitRate,tip:'Query tokens found in top-3 chunks'},
+      {name:'Retrieval precision',val:prec,tip:'Top chunks with score > 30%'},
+      {name:'Chunk granularity',val:Math.max(0,1-avgW/200),tip:'Smaller chunks = higher granularity'},
+      {name:'Coverage (chunks)',val:Math.min(1,chunks.length/20),tip:'More chunks = finer-grained index'},
+    ]);
+  }
+}
+
+function renderMetrics(id,rows){
+  document.getElementById(id).innerHTML=rows.map(r=>{
+    const pct=Math.round(r.val*100);
+    const col=pct>70?'#3a8c3a':pct>40?'#b87000':'#c0392b';
+    return`<div class="metric-row"><div class="metric-name">${r.name}</div><div class="bar-wrap"><div class="bar-fill" style="width:${pct}%;background:${col};"></div></div><div class="metric-num" style="color:${col};">${pct}%</div><div style="font-size:11px;color:#888;margin-left:8px;">${r.tip}</div></div>`;
+  }).join('');
+}
+
+function selStrat(s,el){
+  curStrat=s;
+  document.querySelectorAll('.strat-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('sliding-controls').style.display=s==='sliding'?'block':'none';
+  render();
+}
+function setQ(q){document.getElementById('query').value=q;render();}
+
+// ── Compare ──
+function runCompare(){
+  const query=document.getElementById('cmp-query').value.trim();
+  const text=document.getElementById('doc').value.trim();
+  if(!text||!query){alert('Fill in the document in the Chunk explorer tab first.');return;}
+  const strats=['line','sentence','paragraph','sliding'];
+  const names={line:'Line / bullet',sentence:'Sentence',paragraph:'Paragraph',sliding:'Sliding window'};
+  const results=strats.map(s=>{
+    const chunks=getChunks(text,s);
+    const scored=scoreChunks(query,chunks);
+    const top=scored.slice(0,3);
+    const qT=tok(query),allTop=top.map(c=>c.text).join(' ');
+    const hitRate=qT.length?qT.filter(t=>allTop.toLowerCase().includes(t)).length/qT.length:0;
+    const avgW=Math.round(chunks.reduce((s,c)=>s+c.text.split(/\s+/).length,0)/(chunks.length||1));
+    return{strat:s,name:names[s],chunks:chunks.length,top,hitRate,avgW};
+  });
+  const best=results.reduce((a,b)=>a.hitRate>b.hitRate?a:b);
+  document.getElementById('compare-out').innerHTML=results.map(r=>{
+    const isWinner=r.strat===best.strat;
+    const pct=Math.round(r.hitRate*100);
+    const col=pct>70?'#3a8c3a':pct>40?'#b87000':'#c0392b';
+    return`<div class="compare-col${isWinner?' winner':''}" style="min-width:155px;">
+      <div class="col-title">${r.name}${isWinner?' ✓':''}</div>
+      <div style="font-size:11px;color:#777;margin-bottom:8px;">${r.chunks} chunks · avg ${r.avgW}w</div>
+      <div style="font-size:11px;color:#777;margin-bottom:4px;">Token hit rate</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;"><div class="bar-wrap"><div class="bar-fill" style="width:${pct}%;background:${col};"></div></div><span style="font-size:11px;font-weight:600;color:${col};">${pct}%</span></div>
+      <div style="font-size:11px;color:#777;margin-bottom:3px;">Top chunk</div>
+      <div style="font-size:10px;font-family:monospace;color:#555;background:#f5f5f3;border-radius:5px;padding:5px;line-height:1.5;">${esc(r.top[0]?r.top[0].text.slice(0,100)+'…':'(none)')}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('compare-verdict').innerHTML=`<div class="card"><div class="label" style="margin-bottom:6px;">Verdict</div><strong>${best.name}</strong> wins with ${Math.round(best.hitRate*100)}% token hit rate for "<em>${query}</em>". ${best.chunks} chunks averaging ${best.avgW} words each.</div>`;
+}
+
+
+
+function sw(id){
+  document.querySelectorAll('.tab').forEach((t,i)=>{const tabs=['explore','compare'];t.classList.toggle('active',tabs[i]===id);});
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+  document.getElementById('pane-'+id).classList.add('active');
+}
+
+function esc(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+document.getElementById('doc').addEventListener('input',render);
+document.getElementById('query').addEventListener('input',render);
+render();
+</script>
+</body>
+</html>
